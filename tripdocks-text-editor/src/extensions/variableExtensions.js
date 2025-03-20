@@ -12,6 +12,13 @@ const suggestionItems = [
   { id: "website_url", label: "Website URL", value: "{{website_url}}" },
 ];
 
+const mentionItems = [
+  { id: "john_doe", label: "John Doe", value: "@JohnDoe" },
+  { id: "jane_smith", label: "Jane Smith", value: "@JaneSmith" },
+  { id: "bob_jones", label: "Bob Jones", value: "@BobJones" },
+  { id: "alice_brown", label: "Alice Brown", value: "@AliceBrown" },
+];
+
 export const VariableNode = Node.create({
   name: "variable",
   group: "inline",
@@ -48,6 +55,11 @@ export const VariableNode = Node.create({
       },
       node.attrs.value,
     ];
+  },
+
+  toText({ node }) {
+    console.log("VariableNode toText - node.attrs.value:", node.attrs.value);
+    return node.attrs.value || "";
   },
 
   addNodeView() {
@@ -109,30 +121,157 @@ export const VariableNode = Node.create({
   },
 });
 
+export const MentionNode = Node.create({
+  name: "mention",
+  group: "inline",
+  inline: true,
+  selectable: true,
+  atom: true,
+
+  addAttributes() {
+    return {
+      value: {
+        default: null,
+      },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: "span[data-mention]",
+        getAttrs: (dom) => ({
+          value: dom.getAttribute("data-mention"),
+        }),
+      },
+    ];
+  },
+
+  renderHTML({ node }) {
+    return [
+      "span",
+      {
+        "data-mention": node.attrs.value,
+        style:
+          "background-color: #f0f0f0; color: #333; padding: 2px 6px; border-radius: 4px; cursor: pointer; position: relative;",
+      },
+      node.attrs.value,
+    ];
+  },
+
+  toText({ node }) {
+    console.log("MentionNode toText - node.attrs.value:", node.attrs.value);
+    return node.attrs.value || "";
+  },
+
+  addNodeView() {
+    return ({ node, editor }) => {
+      const wrapper = document.createElement("span");
+      wrapper.style.position = "relative";
+      wrapper.style.display = "inline-block";
+
+      const dom = document.createElement("span");
+      dom.setAttribute("data-mention", node.attrs.value || "");
+      dom.style.backgroundColor = "#f0f0f0";
+      dom.style.color = "#333";
+      dom.style.padding = "2px 6px";
+      dom.style.borderRadius = "4px";
+      dom.style.cursor = "pointer";
+      dom.innerText = node.attrs.value || "";
+
+      wrapper.appendChild(dom);
+
+      dom.addEventListener("click", () => {
+        const { from } = editor.state.selection;
+        editor.commands.setTextSelection({ from: from - (node.attrs.value?.length || 0), to: from });
+        editor.commands.insertContent("@");
+      });
+
+      return {
+        dom: wrapper,
+      };
+    };
+  },
+});
+
 export const VariableExtension = Extension.create({
   name: "variableExtension",
 
   addOptions() {
     return {
       suggestion: {
-        char: "{{",
+        // Use a single char to initialize the plugin; we'll handle multiple triggers manually
+        char: "@",
         allowSpaces: false,
         startOfLine: false,
-        items: ({ query }) => {
-          return suggestionItems.filter((item) =>
-            item.label.toLowerCase().includes(query.toLowerCase())
-          );
+        // Custom decorationNode to prevent conflicts
+        decorationNode: null,
+        // Custom suggestion logic to detect the trigger
+        items: ({ editor, query, range }) => {
+          // Get the text before the cursor to determine the trigger
+          const { from } = editor.state.selection;
+          const textBefore = editor.state.doc.textBetween(Math.max(0, from - 10), from, "\0");
+          console.log("Text before cursor:", textBefore);
+
+          let triggerChar = null;
+          let adjustedQuery = query;
+
+          // Check for {{ trigger
+          if (textBefore.endsWith("{{")) {
+            triggerChar = "{{";
+            adjustedQuery = query;
+          }
+          // Check for @ trigger
+          else if (textBefore.endsWith("@")) {
+            triggerChar = "@";
+            adjustedQuery = query;
+          }
+
+          console.log("Detected triggerChar:", triggerChar, "Query:", adjustedQuery);
+
+          if (triggerChar === "{{") {
+            const filteredItems = suggestionItems.filter((item) =>
+              item.label.toLowerCase().includes(adjustedQuery.toLowerCase())
+            );
+            console.log("Filtered suggestion items for variables:", filteredItems);
+            return filteredItems;
+          } else if (triggerChar === "@") {
+            const filteredItems = mentionItems.filter((item) =>
+              item.label.toLowerCase().includes(adjustedQuery.toLowerCase())
+            );
+            console.log("Filtered suggestion items for mentions:", filteredItems);
+            return filteredItems;
+          }
+
+          return [];
         },
         command: ({ editor, range, props }) => {
-          editor
-            .chain()
-            .focus()
-            .deleteRange(range)
-            .insertContent({
-              type: "variable",
-              attrs: { value: props.value },
-            })
-            .run();
+          const { from, to } = range;
+          const textBefore = editor.state.doc.textBetween(Math.max(0, from - 2), from, "\0");
+          const triggerChar = textBefore.includes("{{") ? "{{" : "@";
+          console.log("Trigger char in command:", triggerChar, "Inserting value:", props.value);
+
+          if (triggerChar === "{{") {
+            editor
+              .chain()
+              .focus()
+              .deleteRange({ from: from - 2, to })
+              .insertContent({
+                type: "variable",
+                attrs: { value: props.value },
+              })
+              .run();
+          } else if (triggerChar === "@") {
+            editor
+              .chain()
+              .focus()
+              .deleteRange({ from: from - 1, to })
+              .insertContent({
+                type: "mention",
+                attrs: { value: props.value },
+              })
+              .run();
+          }
           editor.commands.focus();
         },
         render: () => {
@@ -233,6 +372,16 @@ export const VariableExtension = Extension.create({
             .insertContent({
               type: "variable",
               attrs: { value: variable.value },
+            })
+            .run();
+        },
+      insertMention:
+        (mention) =>
+        ({ chain }) => {
+          return chain()
+            .insertContent({
+              type: "mention",
+              attrs: { value: mention.value },
             })
             .run();
         },
