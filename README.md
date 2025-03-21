@@ -14,9 +14,9 @@ A modern, user-friendly email template editor built with React and TipTap, desig
 
 Watch the demo video below to see the Email Template Editor in action:
 
-![Demo Video](https://user-images.githubusercontent.com/your-github-username/some-id/demo-video.mp4)
 
-> **Note**: If the video doesn’t play, you can download it [here](https://github.com/your-github-username/your-repo-name/raw/main/demo-video.mp4).
+
+> **Note**: Check it out [here](https://drive.google.com/file/d/1hEC8XVCfGlIkfsgFmxZ5YVO1zx1r6H6X/view?usp=sharing).
 
 
 ## 🛠️ Installation
