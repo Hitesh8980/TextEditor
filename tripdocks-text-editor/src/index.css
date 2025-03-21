@@ -2,3 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 @import "tailwindcss";
+.editor-heading {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0.5rem 0;
+  }
+  
+  .bullet-list {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+  }
+  
+  .bullet-list-item {
+    margin: 0.25rem 0;
+  }
+  
+  .editor-paragraph {
+    margin: 0.25rem 0;
+  }
+  /* Ensure headings are styled appropriately */
+.editor-heading {
+    font-size: 1.5rem; /* Adjust size as needed (e.g., 2rem for even bigger) */
+    font-weight: bold;
+    line-height: 1.2;
+    margin: 0.5rem 0;
+  }
+  
+  /* Ensure bullet lists remain styled */
+  .bullet-list {
+    list-style-type: disc;
+    padding-left: 1.5rem;
+  }
+  
+  .bullet-list-item {
+    margin: 0.25rem 0;
+  }
+  
+  /* Prevent paragraph styles from overriding headings */
+  .editor-paragraph {
+    margin: 0.25rem 0;
+  }
+  
+  /* Optional: Override ProseMirror defaults if needed */
+  .ProseMirror h1 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0.5rem 0;
+  }

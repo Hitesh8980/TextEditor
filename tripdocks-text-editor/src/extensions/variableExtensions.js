@@ -1,4 +1,4 @@
-import { Node, Extension } from "@tiptap/core";
+import { Node, mergeAttributes } from "@tiptap/core";
 import Suggestion from "@tiptap/suggestion";
 
 const variableItems = [
@@ -12,8 +12,9 @@ const variableItems = [
   { id: "website_url", label: "Website URL", value: "{{website_url}}" },
 ];
 
-export const VariableNode = Node.create({
+export const VariableExtension = Node.create({
   name: "variable",
+
   group: "inline",
   inline: true,
   selectable: true,
@@ -21,19 +22,31 @@ export const VariableNode = Node.create({
 
   addAttributes() {
     return {
-      value: { default: null },
+      value: {
+        default: null,
+      },
     };
   },
 
   parseHTML() {
-    return [{ tag: "span[data-variable]", getAttrs: (dom) => ({ value: dom.getAttribute("data-variable") }) }];
+    return [
+      {
+        tag: "span[data-variable]",
+        getAttrs: (dom) => ({
+          value: dom.getAttribute("data-variable"),
+        }),
+      },
+    ];
   },
 
   renderHTML({ node }) {
     return [
       "span",
-      { "data-variable": node.attrs.value, style: "background-color: #1890ff; color: white; padding: 2px 6px; border-radius: 4px; cursor: pointer;" },
-      node.attrs.value,
+      mergeAttributes({
+        "data-variable": node.attrs.value,
+        style: "background-color: #1890ff; color: white; padding: 2px 6px; border-radius: 4px; cursor: pointer;",
+      }),
+      node.attrs.value || "",
     ];
   },
 
@@ -54,52 +67,40 @@ export const VariableNode = Node.create({
 
       dom.addEventListener("click", () => {
         const { from } = editor.state.selection;
-        editor.commands.setTextSelection({ from: from - (node.attrs.value?.length || 0), to: from });
+        editor.commands.setTextSelection({
+          from: from - (node.attrs.value?.length || 0),
+          to: from,
+        });
         editor.commands.insertContent("{{");
       });
 
       return { dom };
     };
   },
-});
-
-export const VariableExtension = Extension.create({
-  name: "variableExtension",
 
   addOptions() {
     return {
       suggestion: {
-        char: "{{", 
+        char: "{{",
         allowSpaces: false,
         startOfLine: false,
-        items: ({ editor, query, range }) => {
-          const { from } = editor.state.selection;
-          const textBefore = editor.state.doc.textBetween(Math.max(0, from - 2), from, "\0");
-          console.log("Items - Text before:", textBefore, "Query:", query, "Range:", range);
-
-          if (textBefore === "{{") {
-            console.log("Showing variable suggestions for {{");
-            return variableItems.filter((item) =>
-              item.label.toLowerCase().includes(query.toLowerCase())
-            );
-          }
-          console.log("No match for {{, returning empty array");
-          return [];
+        items: ({ query }) => {
+          console.log("Showing variable suggestions for query:", query);
+          return variableItems.filter((item) =>
+            item.label.toLowerCase().includes(query.toLowerCase())
+          );
         },
         command: ({ editor, range, props }) => {
-          const { from, to } = range;
-          console.log("Command - Range:", range, "Selected:", props);
-
-          const safeFrom = Math.max(0, from - 2);
-
+          console.log("Inserting variable:", props.value, "Range:", range);
           editor
             .chain()
             .focus()
-            .deleteRange({ from: safeFrom, to }) 
-            .insertContent({ type: "variable", attrs: { value: props.value } })
+            .deleteRange(range) // Delete the typed "{{query"
+            .insertContent({
+              type: this.name, // "variable"
+              attrs: { value: props.value },
+            })
             .run();
-
-          editor.commands.focus();
         },
         render: () => {
           let component;
@@ -208,17 +209,6 @@ export const VariableExtension = Extension.create({
       Suggestion({
         editor: this.editor,
         ...this.options.suggestion,
-        filter: (text, from, to) => {
-          const textBefore = editor.state.doc.textBetween(Math.max(0, from - 2), from, "\0");
-          console.log("Filter - Text before:", textBefore, "Text:", text, "From:", from, "To:", to);
-
-          if (textBefore === "{{") {
-            console.log("Filter matched {{, returning range");
-            return { from: from - 2, to, query: text.slice(2) || "" };
-          }
-          console.log("Filter no match for {{");
-          return null;
-        },
       }),
     ];
   },

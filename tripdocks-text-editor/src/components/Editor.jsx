@@ -1,53 +1,104 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import jsPDF from "jspdf";
 import TurndownService from "turndown";
-import { VariableExtension, VariableNode } from "../extensions/variableExtensions"; 
+import { VariableExtension } from "../extensions/variableExtensions"; // Single import
 import { renderVariables } from "../extensions/variable";
 import Toolbar from "./Toolbar";
 
 const Editor = () => {
-  const [editorContent, setEditorContent] = useState(localStorage.getItem("editorContent") || "");
+  const editorRef = useRef(null);
+
+  const getInitialContent = () => {
+    const storedContent = localStorage.getItem("editorContent");
+    try {
+      if (storedContent && typeof storedContent === "string" && storedContent.trim().startsWith("<")) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(storedContent, "text/html");
+        const paragraphs = doc.body.querySelectorAll("p");
+        let validContent = "";
+        paragraphs.forEach((p) => {
+          if (p.textContent.trim()) {
+            validContent += p.outerHTML;
+          }
+        });
+        return validContent || "<p>Start typing...</p>";
+      }
+      return "<p>Start typing...</p>";
+    } catch (e) {
+      console.error("Error parsing stored content, resetting:", e);
+      return "<p>Start typing...</p>";
+    }
+  };
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
-      VariableExtension,
-      VariableNode, 
+      StarterKit.configure({
+        heading: {
+          levels: [1, 2, 3],
+          HTMLAttributes: {
+            class: "editor-heading",
+          },
+        },
+        bulletList: {
+          HTMLAttributes: {
+            class: "bullet-list",
+          },
+        },
+        listItem: {
+          HTMLAttributes: {
+            class: "bullet-list-item",
+          },
+        },
+        paragraph: {
+          HTMLAttributes: {
+            class: "editor-paragraph",
+          },
+        },
+      }),
+      VariableExtension, // Use the combined extension
     ],
-    content: editorContent,
+    content: getInitialContent(),
     editable: true,
     onUpdate: ({ editor }) => {
       const content = editor.getHTML();
       console.log("Editor updated - HTML content:", content);
-      setEditorContent(content);
       localStorage.setItem("editorContent", content);
     },
-    onCreate: () => {
-      console.log("Editor initialized");
+    onCreate: ({ editor }) => {
+      console.log("Editor initialized with content:", editor.getHTML());
+    },
+    editorProps: {
+      handleDOMEvents: {
+        blur: (view, event) => {
+          console.log("Blur detected, refocusing");
+          setTimeout(() => {
+            if (document.activeElement !== view.dom) {
+              view.focus();
+            }
+          }, 0);
+          return false;
+        },
+      },
     },
   });
 
   useEffect(() => {
+    editorRef.current = editor;
+    if (editor && !editor.isFocused) {
+      editor.commands.focus();
+    }
     return () => {
-      if (editor) {
-        editor.destroy();
+      if (editorRef.current) {
+        editorRef.current.destroy();
       }
     };
   }, [editor]);
 
   const getEditorText = (editor) => {
-    if (!editor) {
-      console.warn("getEditorText: Editor is not initialized");
-      return "";
-    }
+    if (!editor) return "";
     const doc = editor.getJSON();
-    if (!doc || !doc.content) {
-      console.warn("getEditorText: Editor JSON content is empty or invalid", doc);
-      return "";
-    }
-
     let text = "";
     const traverseNode = (node) => {
       if (!node) return;
@@ -55,57 +106,39 @@ const Editor = () => {
         text += node.text;
       } else if (node.type === "variable" && node.attrs && node.attrs.value) {
         text += node.attrs.value;
-      } // Removed mention handling since MentionNode is gone
+      }
       if (node.content) {
         node.content.forEach(traverseNode);
       }
     };
-
     doc.content.forEach(traverseNode);
-    console.log("getEditorText result:", text);
     return text || "";
   };
 
   const clearContent = () => {
     if (!editor) return;
-    editor.commands.clearContent(true);
-    setEditorContent("");
-    localStorage.removeItem("editorContent");
+    editor.commands.setContent("<p>Start typing...</p>");
+    localStorage.setItem("editorContent", "<p>Start typing...</p>");
+    editor.commands.focus();
   };
 
   const exportToPDF = (format = "raw") => {
-    if (!editor) {
-      console.error("Editor is not initialized");
-      return;
-    }
+    if (!editor) return;
     const doc = new jsPDF();
-    console.log("Editor JSON content:", editor.getJSON());
     let content = getEditorText(editor);
-    console.log("Raw content from getEditorText():", content);
     if (format === "rendered") {
       content = renderVariables(content);
-      console.log("Rendered content after renderVariables:", content);
     }
     doc.text(content, 10, 10);
     doc.save(`editor-content-${format}.pdf`);
   };
 
   const exportToMarkdown = (format = "raw") => {
-    if (!editor) {
-      console.error("Editor is not initialized");
-      return;
-    }
+    if (!editor) return;
     const turndownService = new TurndownService();
-    let content;
-    if (format === "rendered") {
-      const text = getEditorText(editor);
-      console.log("Text for Markdown (rendered):", text);
-      const renderedText = renderVariables(text);
-      console.log("Rendered text for Markdown:", renderedText);
-      content = `<p>${renderedText}</p>`;
-    } else {
-      content = editor.getHTML();
-    }
+    let content = format === "rendered" 
+      ? `<p>${renderVariables(getEditorText(editor))}</p>` 
+      : editor.getHTML();
     const markdown = turndownService.turndown(content);
     const blob = new Blob([markdown], { type: "text/markdown" });
     const link = document.createElement("a");
@@ -117,31 +150,7 @@ const Editor = () => {
   };
 
   if (!editor) {
-    return (
-      <div className="text-center text-gray-500 py-10">
-        <svg
-          className="animate-spin h-5 w-5 text-gray-500 inline-block mr-2"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-        >
-          <circle
-            className="opacity-25"
-            cx="12"
-            cy="12"
-            r="10"
-            stroke="currentColor"
-            strokeWidth="4"
-          ></circle>
-          <path
-            className="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-          ></path>
-        </svg>
-        Loading editor...
-      </div>
-    );
+    return <div>Loading editor...</div>;
   }
 
   return (
@@ -159,7 +168,7 @@ const Editor = () => {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth="2"
-              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586"
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
             ></path>
           </svg>
           Email Template Editor
@@ -172,121 +181,23 @@ const Editor = () => {
       </div>
 
       <div
-        className="bg-white rounded-xl shadow-md border border-gray-200 p-6 min-h-[300px] text-gray-800 text-base leading-relaxed focus-within:ring-2 focus-within:ring-blue-400 transition-all duration-200"
-        onClick={() => editor.commands.focus()}
+        className="bg-white rounded-xl shadow-md border border-gray-200 p-6 min-h-[300px] max-h-[500px] overflow-y-auto text-gray-800 text-base leading-relaxed focus-within:ring-2 focus-within:ring-blue-400 transition-all duration-200"
       >
         <EditorContent editor={editor} />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-4">
-        {/* Clear Button */}
-        <button
-          onClick={clearContent}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg shadow-lg hover:from-red-600 hover:to-pink-600 focus:ring-4 focus:ring-red-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
-        >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-            ></path>
+        <button onClick={clearContent} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg shadow-lg hover:from-red-600 hover:to-pink-600">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
           </svg>
           Clear
         </button>
-
-        {/* PDF Buttons */}
         <div className="flex gap-3">
-          <button
-            onClick={() => exportToPDF("raw")}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-400 to-teal-500 text-white font-semibold rounded-lg shadow-lg hover:from-green-500 hover:to-teal-600 focus:ring-4 focus:ring-green-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              ></path>
-            </svg>
-            PDF (Raw)
-          </button>
-          <button
-            onClick={() => exportToPDF("rendered")}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg shadow-lg hover:from-emerald-600 hover:to-cyan-600 focus:ring-4 focus:ring-emerald-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-              ></path>
-            </svg>
-            PDF (Rendered)
-          </button>
-        </div>
-
-        {/* Markdown Buttons */}
-        <div className="flex gap-3">
-          <button
-            onClick={() => exportToMarkdown("raw")}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-lg shadow-lg hover:from-blue-600 hover:to-indigo-600 focus:ring-4 focus:ring-blue-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              ></path>
-            </svg>
-            MD (Raw)
-          </button>
-          <button
-            onClick={() => exportToMarkdown("rendered")}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-violet-500 text-white font-semibold rounded-lg shadow-lg hover:from-purple-600 hover:to-violet-600 focus:ring-4 focus:ring-purple-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              ></path>
-            </svg>
-            MD (Rendered)
-          </button>
+          <button onClick={() => exportToPDF("raw")} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-400 to-teal-500 text-white font-semibold rounded-lg shadow-lg hover:from-green-500 hover:to-teal-600">PDF (Raw)</button>
+          <button onClick={() => exportToPDF("rendered")} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg shadow-lg hover:from-emerald-600 hover:to-cyan-600">PDF (Rendered)</button>
+          <button onClick={() => exportToMarkdown("raw")} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-semibold rounded-lg shadow-lg hover:from-purple-600 hover:to-indigo-600">Markdown (Raw)</button>
+          <button onClick={() => exportToMarkdown("rendered")} className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-semibold rounded-lg shadow-lg hover:from-blue-600 hover:to-cyan-600">Markdown (Rendered)</button>
         </div>
       </div>
     </div>
