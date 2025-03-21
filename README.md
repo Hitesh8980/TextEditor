@@ -37,12 +37,15 @@ Follow these steps to set up the Email Template Editor on your local machine.
    git clone https://github.com/your-github-username/your-repo-name.git
    cd your-repo-name
 2. Install Dependencies ⚙️
-Using npm:
-   ```
-      npm install
-3. Run the Application ▶️
 
-Start the development server: 
+  Using npm:
+
+      
+      npm install
+        
+4. Run the Application ▶️
+
+   Start the development server: 
     
        npm run dev
 4. Open in Browser 🌍
