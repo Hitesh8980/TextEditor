@@ -3,15 +3,19 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import jsPDF from "jspdf";
 import TurndownService from "turndown";
-import { VariableExtension, VariableNode, MentionNode } from "../extensions/variableExtensions";
-import { renderVariables } from "../extensions/variable"; 
+import { VariableExtension, VariableNode } from "../extensions/variableExtensions"; 
+import { renderVariables } from "../extensions/variable";
 import Toolbar from "./Toolbar";
 
 const Editor = () => {
   const [editorContent, setEditorContent] = useState(localStorage.getItem("editorContent") || "");
 
   const editor = useEditor({
-    extensions: [StarterKit, VariableExtension, VariableNode, MentionNode],
+    extensions: [
+      StarterKit,
+      VariableExtension,
+      VariableNode, 
+    ],
     content: editorContent,
     editable: true,
     onUpdate: ({ editor }) => {
@@ -45,16 +49,13 @@ const Editor = () => {
     }
 
     let text = "";
-
     const traverseNode = (node) => {
       if (!node) return;
       if (node.type === "text" && node.text) {
         text += node.text;
       } else if (node.type === "variable" && node.attrs && node.attrs.value) {
         text += node.attrs.value;
-      } else if (node.type === "mention" && node.attrs && node.attrs.value) {
-        text += node.attrs.value;
-      }
+      } // Removed mention handling since MentionNode is gone
       if (node.content) {
         node.content.forEach(traverseNode);
       }
@@ -145,7 +146,6 @@ const Editor = () => {
 
   return (
     <div className="max-w-5xl mx-auto p-6 bg-gray-100 min-h-screen">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-3xl font-semibold text-gray-800 flex items-center gap-3">
           <svg
@@ -159,22 +159,18 @@ const Editor = () => {
               strokeLinecap="round"
               strokeLinejoin="round"
               strokeWidth="2"
-              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586"
             ></path>
           </svg>
           Email Template Editor
         </h2>
-        <div className="text-sm text-gray-500">
-          Last saved: {new Date().toLocaleTimeString()}
-        </div>
+        <div className="text-sm text-gray-500">Last saved: {new Date().toLocaleTimeString()}</div>
       </div>
 
-      {/* Toolbar */}
       <div className="mb-4">
         <Toolbar editor={editor} />
       </div>
 
-      {/* Editor Area */}
       <div
         className="bg-white rounded-xl shadow-md border border-gray-200 p-6 min-h-[300px] text-gray-800 text-base leading-relaxed focus-within:ring-2 focus-within:ring-blue-400 transition-all duration-200"
         onClick={() => editor.commands.focus()}
@@ -182,11 +178,11 @@ const Editor = () => {
         <EditorContent editor={editor} />
       </div>
 
-      {/* Action Buttons */}
       <div className="mt-6 flex flex-wrap gap-4">
+        {/* Clear Button */}
         <button
           onClick={clearContent}
-          className="flex items-center gap-2 px-5 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:ring-4 focus:ring-red-300 focus:outline-none transition-all duration-200 shadow-sm"
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg shadow-lg hover:from-red-600 hover:to-pink-600 focus:ring-4 focus:ring-red-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
         >
           <svg
             className="h-5 w-5"
@@ -204,10 +200,12 @@ const Editor = () => {
           </svg>
           Clear
         </button>
+
+        {/* PDF Buttons */}
         <div className="flex gap-3">
           <button
             onClick={() => exportToPDF("raw")}
-            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:ring-4 focus:ring-green-300 focus:outline-none transition-all duration-200 shadow-sm"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-400 to-teal-500 text-white font-semibold rounded-lg shadow-lg hover:from-green-500 hover:to-teal-600 focus:ring-4 focus:ring-green-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
           >
             <svg
               className="h-5 w-5"
@@ -227,7 +225,7 @@ const Editor = () => {
           </button>
           <button
             onClick={() => exportToPDF("rendered")}
-            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:ring-4 focus:ring-green-300 focus:outline-none transition-all duration-200 shadow-sm"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 text-white font-semibold rounded-lg shadow-lg hover:from-emerald-600 hover:to-cyan-600 focus:ring-4 focus:ring-emerald-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
           >
             <svg
               className="h-5 w-5"
@@ -246,10 +244,12 @@ const Editor = () => {
             PDF (Rendered)
           </button>
         </div>
+
+        {/* Markdown Buttons */}
         <div className="flex gap-3">
           <button
             onClick={() => exportToMarkdown("raw")}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 focus:outline-none transition-all duration-200 shadow-sm"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-lg shadow-lg hover:from-blue-600 hover:to-indigo-600 focus:ring-4 focus:ring-blue-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
           >
             <svg
               className="h-5 w-5"
@@ -269,7 +269,7 @@ const Editor = () => {
           </button>
           <button
             onClick={() => exportToMarkdown("rendered")}
-            className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:ring-4 focus:ring-blue-300 focus:outline-none transition-all duration-200 shadow-sm"
+            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-500 to-violet-500 text-white font-semibold rounded-lg shadow-lg hover:from-purple-600 hover:to-violet-600 focus:ring-4 focus:ring-purple-300 focus:outline-none transform hover:scale-105 transition-all duration-300"
           >
             <svg
               className="h-5 w-5"
